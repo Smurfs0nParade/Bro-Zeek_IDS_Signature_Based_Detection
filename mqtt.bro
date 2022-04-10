@@ -1,3 +1,5 @@
+# Looks for a 'subscribe all' for the MQQT protocol
+
 module MQTT;
 
 export {
@@ -7,85 +9,35 @@ redef enum Notice::Type +=
 	};
 }
 
+# Tests all TCP packets
 event tcp_packet(c: connection, is_orig: bool, flags: string, seq: count, ack: count, len: count, payload: string)
 {
-	print payload;
-	local message = string_to_ascii_hex(payload);
-	print message;
-	#local length = bytestring_to_count(hexstr_to_bytestring(sub_bytes(message, 3, 2)));
-	#print length;
-	#print (length + 2) * 2;
-	#local phrase = "This is a test";
-	#print sub_bytes(phrase, 1, 4);
-	
+	# Detects the use of MQQT Protocol
 	if (c$id$resp_p == 1883/tcp)
 	{
-		# print "MQTT Detected!";
-		# print payload;
-		
-		
-		
-		local j = string_to_ascii_hex(payload);
-		local test = bytestring_to_count(hexstr_to_bytestring(sub_bytes(string_to_ascii_hex(payload), 3, 2)));
-		test = (test + 2) * 2;
-		# print test;
-		# print sub_bytes(j, 1, test);
-		
-		
-		
-		# Counts how many timesa subscribe is found in the payload
+		local packetPayload = string_to_ascii_hex(payload);
+		local length = 0;
+		local content = "";
 		local subscribeCount = 0;
-		# Flag to determine if we are examining a subscribe in the payload
-		# 0 if we are not, 1 if we are
-		local subscribeFlag = 0;
-		# The hex string containing the subscribe request
-		local subscribeString = "";
-		for (i in payload)
+		local topic = "";
+		
+		# Iterates through packet payload looking for a subscribe and then a subscribe all
+		while (payload != "")
 		{
-			# Looks for the begining hex of a subscribe request
-			if (i == "\x82")
-			{
-				#print i;
-				subscribeString = "";
-				subscribeString += i;
-				subscribeFlag += 1;
-			}
-			subscribeString += i;
+			length = bytestring_to_count(payload[1:2]);
+			length = length + 2;
+			content = payload[0:length];
+			payload = subst_string(payload, content, "");
 			
-			#print subscribeString;
-			
-			# Tests if we are looking at a subsribe request and if we are
-			# at the end of it
-			if (subscribeString[5:6] == "\00")
+			if (content[0:1] == "\x82")
 			{
-				#print subscribeString;
-				#print payload;
-				if (subscribeFlag == 1)
-				{
-					subscribeCount += 1;
-					subscribeString = "";
-					subscribeFlag = 0;
-					
-					#print subscribeString;
-					#print "Subscribe Detected!";
-					
-					#NOTICE([$note=Mqtt::Subscribe,
-					#$msg=fmt(rstrip(addr_to_ptr_name(c$id$orig_h), ".in-addr.arpa") + " attempts to subscribe to all")]);
-					#print "Alert Raised!";
-					
-				}
+				topic = content[length - 2:length-1];
+					if (topic == "#")
+					{
+						NOTICE([$note=Mqtt::Subscribe, $msg=fmt(rstrip(addr_to_ptr_name(c$id$orig_h), ".in-addr.arpa") + " attempts to subscribe to " + topic + " topics.")]);
+						print "Alert Raised!";
+					}
 			}
-		}
-		#print subscribeCount;
-		#print subscribeString;
 	}
-	# print c;
-	#print "--------------------------------------------------------------------------------";
-	#if (subscribeCount > 1)
-	#{
-	#NOTICE([$note=Mqtt::Subscribe,
-		#$msg=fmt(rstrip(addr_to_ptr_name(c$id$orig_h), ".in-addr.arpa") + " attempts to subscribe to all")]);
-		#print "Alert Raised!";
-	#}
 }
 
